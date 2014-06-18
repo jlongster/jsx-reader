@@ -9,28 +9,6 @@ function JSXBailError(message) {
 
 // Utility functions
 
-// The following 3 functions were taken from esprima
-function isLineTerminator(ch) {
-  return (ch === 10) || (ch === 13) || (ch === 0x2028) || (ch === 0x2029);
-}
-
-function isIdentifierStart(ch) {
-  return (ch === 36) || (ch === 95) ||  // $ (dollar) and _ (underscore)
-  (ch >= 65 && ch <= 90) ||         // A..Z
-  (ch >= 97 && ch <= 122) ||        // a..z
-  (ch === 92) ||                    // \ (backslash)
-  ((ch >= 0x80) && Regex.NonAsciiIdentifierStart.test(String.fromCharCode(ch)));
-}
-
-function isIdentifierPart(ch) {
-  return (ch === 36) || (ch === 95) ||  // $ (dollar) and _ (underscore)
-  (ch >= 65 && ch <= 90) ||         // A..Z
-  (ch >= 97 && ch <= 122) ||        // a..z
-  (ch >= 48 && ch <= 57) ||         // 0..9
-  (ch === 92) ||                    // \ (backslash)
-  ((ch >= 0x80) && Regex.NonAsciiIdentifierPart.test(String.fromCharCode(ch)));
-}
-
 function withLoc(parser, token, start) {
   token.lineNumber = parser.lineNumber;
   token.lineStart = parser.lineStart,
