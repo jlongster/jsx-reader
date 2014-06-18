@@ -22,3 +22,33 @@ More to come.
 Much to see.
 
 Wow.
+
+```
+<div>
+  Monkeys:
+  {listOfMonkeys} {scratchesAss}
+</div>
+```
+
+```
+React.DOM.div(null, 'Monkeys:', listOfMonkeys, ' ', scratchesAss);
+```
+
+Or
+
+```
+<div>
+    <h1>Title</h1>
+    <p>
+</div>
+```
+
+```
+SyntaxError: [JSX] Expected correspoding closing tag for p
+5: </div>
+     ^
+    at Object.readtables.parserAccessor.throwSyntaxError (/Users/james/projects/jsx-
+reader/node_modules/sweet.js/lib/parser.js:4947:23)                                
+    at Object.JSXReader.readElement (/Users/james/projects/jsx-reader/jsx-reader.js:
+223:21)                                                                            
+```

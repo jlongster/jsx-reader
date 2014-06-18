@@ -214,16 +214,16 @@ JSXReader.prototype = {
         this.readChild();
       }
 
-      var closingName = this.buffer.getTokens(
+      var closingNameToks = this.buffer.getTokens(
         this.readClosingElement.bind(this)
-      ).reduce(tokReduce, '');
+      );
+      var closingName = closingNameToks.reduce(tokReduce, '');
       
       if(openingName !== closingName) {
         this.parser.throwSyntaxError(
           'JSX',
           'Expected correspoding closing tag for ' + openingName,
-          this.parser,
-          closingName
+          closingNameToks[0]
         )
       }
     }
