@@ -1,6 +1,8 @@
 
 var sweet = require('sweet.js');
 
+sweet.loadMacro('./jsx-macro.js');
+
 // Error handling
 
 function JSXBailError(message) {
@@ -39,8 +41,16 @@ TokenBuffer.prototype = {
     return buf;
   },
 
+  reset: function() {
+    this.buffer = [];
+  },
+  
   expect: function(ch) {
     var parser = this.parser;
+    if(parser.index >= parser.length) {
+      throw new JSXBailError('bailed since end of file found');
+    }
+
     var punc = parser.getQueued();
     if(!punc) {
       try {
@@ -52,9 +62,10 @@ TokenBuffer.prototype = {
        (punc.type !== parser.Token.Punctuator &&
         punc.value !== ch)) {
       throw new Error(
-        'unexpected: ' + parser.source.slice(parser.index,
-                                             parser.index+5) +
-          ', wanted: ' + ch
+        'wanted `' + ch +
+          '` but got `' +
+          parser.source.slice(parser.index, parser.index+5) +
+          '`'
       );
     }
     return punc;
@@ -143,6 +154,7 @@ JSXReader.prototype = {
       if(!(e instanceof JSXBailError)) {
         throw e;
       }
+      this.buffer.reset();
       return;
     }
 
