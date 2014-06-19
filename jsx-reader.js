@@ -1,6 +1,5 @@
 
 var sweet = require('sweet.js');
-var syn = require('sweet.js/lib/syntax');
 var helperMacro = sweet.loadNodeModule(__dirname, './jsx-macro.js');
 
 // Error handling
@@ -180,11 +179,7 @@ JSXReader.prototype = {
     ];
 
     // Invoke our helper macro
-    var expanded = syn.syntaxToTokens(
-      sweet.expandSyntax(syn.tokensToSyntax(tokens),
-                         [helperMacro])
-    );
-
+    var expanded = sweet.expandSyntax(tokens, [helperMacro])
     this.buffer.add(expanded);
   },
 
