@@ -1,7 +1,7 @@
 
 var sweet = require('sweet.js');
-
-sweet.loadMacro('./jsx-macro.js');
+var syn = require('sweet.js/lib/syntax');
+var helperMacro = sweet.loadNodeModule(__dirname, './jsx-macro.js');
 
 // Error handling
 
@@ -146,7 +146,7 @@ JSXReader.prototype = {
     var start = parser.index;
 
     try {
-      var tokens = this.buffer.getTokens(function() {
+      var innerTokens = this.buffer.getTokens(function() {
         this.readElement();
       }.bind(this));
     }
@@ -158,25 +158,34 @@ JSXReader.prototype = {
       return;
     }
 
-    var firstTok = tokens[0];
-    var lastTok = tokens[tokens.length - 1];
+    var firstTok = innerTokens[0];
+    var lastTok = innerTokens[innerTokens.length - 1];
 
-    this.buffer.add(withLoc(parser, {
-      type: Token.Identifier,
-      value: 'DOM',
-    }, start));
+    var tokens = [
+      withLoc(parser, {
+        type: Token.Identifier,
+        value: 'DOM',
+      }, start),
 
-    this.buffer.add({
-      type: Token.Delimiter,
-      value: '{}',
-      startLineNumber: firstTok.lineNumber,
-      startLineStart: firstTok.lineStart,
-      startRange: firstTok.range,
-      inner: tokens,
-      endLineNumber: lastTok.lineNumber,
-      endLineStart: lastTok.lineStart,
-      endRange: lastTok.range,
-    });
+      { type: Token.Delimiter,
+        value: '{}',
+        startLineNumber: firstTok.lineNumber,
+        startLineStart: firstTok.lineStart,
+        startRange: firstTok.range,
+        inner: innerTokens,
+        endLineNumber: lastTok.lineNumber,
+        endLineStart: lastTok.lineStart,
+        endRange: lastTok.range
+      }
+    ];
+
+    // Invoke our helper macro
+    var expanded = syn.syntaxToTokens(
+      sweet.expandSyntax(syn.tokensToSyntax(tokens),
+                         [helperMacro])
+    );
+
+    this.buffer.add(expanded);
   },
 
   readElement: function() {
