@@ -8,19 +8,10 @@ function JSXBailError(message) {
   this.message = message;
 }
 
-// Utility functions
-
-function withLoc(parser, token, start) {
-  token.lineNumber = parser.lineNumber;
-  token.lineStart = parser.lineStart,
-  token.range = [start || parser.index, parser.index]
-  return token;
-}
-
 // A helper buffer class
 
-function TokenBuffer(parser) {
-  this.parser = parser;
+function TokenBuffer(reader) {
+  this.reader = reader;
   this.buffer = [];
 }
 
@@ -43,27 +34,25 @@ TokenBuffer.prototype = {
   reset: function() {
     this.buffer = [];
   },
-  
+
   expect: function(ch) {
-    var parser = this.parser;
-    if(parser.index >= parser.length) {
+    var reader = this.reader;
+    if(reader.index >= reader.length) {
       throw new JSXBailError('bailed since end of file found');
     }
 
-    var punc = parser.getQueued();
+    var punc = reader.getQueued();
     if(!punc) {
-      try {
-        punc = parser.scanPunctuator();
-      }
-      catch(e) {}
+        punc = reader.suppressReadError(reader.readPunctuator);
     }
+
     if(!punc ||
-       (punc.type !== parser.Token.Punctuator &&
+       (punc.type !== reader.Token.Punctuator &&
         punc.value !== ch)) {
       throw new Error(
         'wanted `' + ch +
           '` but got `' +
-          parser.source.slice(parser.index, parser.index+5) +
+          reader.source.slice(reader.index, reader.index+5) +
           '`'
       );
     }
@@ -72,8 +61,8 @@ TokenBuffer.prototype = {
 
   match: function(/* ch1, ch2, ... chN */) {
     var chars = Array.prototype.slice.call(arguments);
-    var parser = this.parser;
-    var start = parser.index;
+    var reader = this.reader;
+    var start = reader.index;
     var matched = true;
 
     // First, we need to walk through any tokens that are queued
@@ -81,32 +70,22 @@ TokenBuffer.prototype = {
     // recursively called, so there might be some tokens we need
     // to check here first.
     for(var i=0; i<chars.length; i++) {
-      var tok = parser.peekQueued(i);
+      var tok = reader.peekQueued(i);
       if(!tok) {
         break;
       }
 
       matched = (matched &&
-                 tok.type === parser.Token.Punctuator &&
+                 tok.type === reader.Token.Punctuator &&
                  tok.value === chars[i]);
     }
 
     for(i; i<chars.length; i++) {
-      try {
-        var punc = parser.scanPunctuator();
-        matched = matched && punc.value === chars[i];
-      }
-      catch(e) {
-        if(!parser.isScanError(e)) {
-          throw e;
-        }
-        
-        matched = false;
-        break;
-      }
+        var punc = reader.suppressReadError(reader.readPunctuator);
+        matched = matched && punc && punc.value === chars[i];
     }
 
-    parser.index = start;
+    reader.index = start;
     return matched;
   },
 
@@ -125,9 +104,9 @@ TokenBuffer.prototype = {
   }
 };
 
-function JSXReader(parser) {
-  this.parser = parser;
-  this.buffer = new TokenBuffer(parser);
+function JSXReader(reader) {
+  this.reader = reader;
+  this.buffer = new TokenBuffer(reader);
 }
 
 JSXReader.prototype = {
@@ -140,9 +119,9 @@ JSXReader.prototype = {
   },
   
   read: function() {
-    var parser = this.parser;
-    var Token = parser.Token;
-    var start = parser.index;
+    var reader = this.reader;
+    var Token = reader.Token;
+    var start = reader.index;
 
     try {
       var innerTokens = this.buffer.getTokens(function() {
@@ -157,25 +136,9 @@ JSXReader.prototype = {
       return;
     }
 
-    var firstTok = innerTokens[0];
-    var lastTok = innerTokens[innerTokens.length - 1];
-
     var tokens = [
-      withLoc(parser, {
-        type: Token.Identifier,
-        value: 'DOM',
-      }, start),
-
-      { type: Token.Delimiter,
-        value: '{}',
-        startLineNumber: firstTok.lineNumber,
-        startLineStart: firstTok.lineStart,
-        startRange: firstTok.range,
-        inner: innerTokens,
-        endLineNumber: lastTok.lineNumber,
-        endLineStart: lastTok.lineStart,
-        endRange: lastTok.range
-      }
+        reader.makeIdentifier('DOM', { start: start }),
+        reader.makeDelimiter('{}', innerTokens)
     ];
 
     // Invoke our helper macro
@@ -188,8 +151,8 @@ JSXReader.prototype = {
       return acc + tok.value;
     }
 
-    var parser = this.parser;
-    var Token = parser.Token, selfClosing;
+    var reader = this.reader;
+    var Token = reader.Token, selfClosing;
     var openingNameToks = this.buffer.watchTokens(function() {
       selfClosing = this.readOpeningElement();
     }.bind(this));
@@ -200,7 +163,7 @@ JSXReader.prototype = {
         .reduce(tokReduce, '');
 
     if(!selfClosing) {
-      while(this.parser.index < this.parser.length) {
+      while(this.reader.index < this.reader.length) {
         if(this.match('<', '/')) {
           break;
         }
@@ -214,7 +177,7 @@ JSXReader.prototype = {
       var closingName = closingNameToks.reduce(tokReduce, '');
       
       if(openingName !== closingName) {
-        this.parser.throwSyntaxError(
+        this.reader.throwSyntaxError(
           'JSX',
           'Expected correspoding closing tag for ' + openingName,
           closingNameToks[0]
@@ -228,46 +191,36 @@ JSXReader.prototype = {
   },
 
   readOpeningElement: function() {
-    var parser = this.parser;
+    var reader = this.reader;
     var selfClosing = false;
-    var start = parser.index;
+    var start = reader.index;
     
     this.expect('<');
     this.readElementName();            
-    parser.scanComment();
+    reader.skipComment();
 
     var tokens = this.buffer.getTokens(function() {
       var end = false;
 
-      while(parser.index < parser.length &&
+      while(reader.index < reader.length &&
             !this.match('/') &&
             !this.match('>')) {
         this.readAttribute();
         end = this.match('/') || this.match('>');
         if(!end) {
-          this.buffer.add({
-            type: parser.Token.Punctuator,
-            value: ','
-          });
+            this.buffer.add(reader.makePunctuator(','));
         }
       }
     }.bind(this));
 
     if(tokens.length) {
-      this.buffer.add(withLoc(parser, {
-        type: parser.Token.Delimiter,
-        value: '{}',
-        inner: tokens
-      }, start));
+      this.buffer.add(reader.makeDelimiter('{}', tokens));
     }
     else {
-      this.buffer.add({
-        type: parser.Token.NullLiteral,
-        value: 'null'
-      });
+      this.buffer.add(reader.makeIdentifier('null'));
     }
 
-    parser.scanComment();
+    reader.skipComment();
     if(this.match('/')) {
       selfClosing = true;
       this.expect('/');
@@ -292,21 +245,22 @@ JSXReader.prototype = {
       this.read();
     }
     else {
+      var start = this.reader.index;
       var toks = this.buffer.getTokens(function() {
         this.readText(['{', '<']);
       }.bind(this));
-      this.renderLiteral(toks[0].value);
+      this.renderLiteral(toks[0].value, start);
     }
   },
 
-  renderLiteral: function(str) {
+  renderLiteral: function(str, start) {
     var lines = str.split(/\r\n|\n|\r/);
     var output = [];
 
     lines.forEach(function(line, index) {
       var isFirstLine = index === 0;
       var isLastLine = index === lines.length - 1;
-      
+
       // replace rendered whitespace tabs with spaces
       var trimmedLine = line.replace(/\t/g, ' ');
 
@@ -323,37 +277,26 @@ JSXReader.prototype = {
       }
     });
 
-    var parser = this.parser;
+    var reader = this.reader;
+    var tokOpts = { start: start };
     output.forEach(function(str, i) {
       if(i !== 0) {
-        this.buffer.add({
-          type: parser.Token.Punctuator,
-          value: '+'
-        });
-        this.buffer.add({
-          type: parser.Token.StringLiteral,
-          value: ' '
-        });
-        this.buffer.add({
-          type: parser.Token.Punctuator,
-          value: '+'
-        });
+        this.buffer.add(reader.makePunctuator('+', tokOpts));
+        this.buffer.add(reader.makeStringLiteral(' ', tokOpts));
+        this.buffer.add(reader.makePunctuator('+', tokOpts));
       }
-      this.buffer.add({
-        type: parser.Token.StringLiteral,
-        value: str
-      });
+      this.buffer.add(reader.makeStringLiteral(str, tokOpts));
     }.bind(this));
   },
 
   readText: function(stopChars) {
-    var parser = this.parser;
+    var reader = this.reader;
     var ch, str = '';
-    var source = parser.source;
-    var start = parser.index;
+    var source = reader.source;
+    var start = reader.index;
 
-    while(parser.index < parser.length) {
-      ch = source[parser.index];
+    while(reader.index < reader.length) {
+      ch = source[reader.index];
       if(stopChars.indexOf(ch) !== -1) {
         break;
       }
@@ -362,36 +305,35 @@ JSXReader.prototype = {
         str += this.readEntity();
       }
       else {
-        parser.index++;
-        if(parser.isLineTerminator(ch.charCodeAt(0))) {
-          parser.lineNumber++;
-          parser.lineStart = parser.index;
+        reader.index++;
+        if(reader.isLineTerminator(ch.charCodeAt(0))) {
+          reader.lineNumber++;
+          reader.lineStart = reader.index;
         }
         str += ch;
       }
     }
 
-    this.buffer.add(withLoc(parser, {
-      type: parser.Token.StringLiteral,
-      value: str
-    }, start));
+    this.buffer.add(
+      reader.makeStringLiteral(str, { start: start })
+    );
   },
 
   readEntity: function() {
-    var parser = this.parser;
-    var source = parser.source;
-    var ch = source[parser.index];
+    var reader = this.reader;
+    var source = reader.source;
+    var ch = source[reader.index];
     var str = '', count = 0, entity;
 
     if(ch !== '&') {
-      parser.throwSyntaxError('JSX',
+      reader.throwSyntaxError('JSX',
                               'Entity must start with an ampersand',
-                              parser.readToken([]));
+                              reader.readToken());
     }
-    parser.index++;
+    reader.index++;
 
-    while(parser.index < parser.length && count < 10) {
-      ch = source[parser.index++];
+    while(reader.index < reader.length && count < 10) {
+      ch = source[reader.index++];
       if(ch === ';') {
         break;
       }
@@ -411,10 +353,10 @@ JSXReader.prototype = {
   },
 
   readElementName: function() {
-    var parser = this.parser;
-    var ch = parser.source[parser.index];
+    var reader = this.reader;
+    var ch = reader.source[reader.index];
 
-    if(!parser.isIdentifierStart(ch.charCodeAt(0))) {
+    if(!reader.isIdentifierStart(ch.charCodeAt(0))) {
       throw new JSXBailError('bailed while reading element ' +
                              'name: ' + ch);
     }
@@ -443,27 +385,21 @@ JSXReader.prototype = {
       this.expect('=');
     }
 
-    this.buffer.add({
-      type: this.parser.Token.Punctuator,
-      value: ':'
-    });
+    this.buffer.add(this.reader.makePunctuator(':'));
 
     if(hasValue) {
       this.readAttributeValue();
     }
     else {
-      this.buffer.add({
-        type: this.parser.Token.BooleanLiteral,
-        value: 'true'
-      });
+      this.buffer.add(this.reader.makeIdentifier('true'));
     }
 
-    this.parser.scanComment();
+    this.reader.skipComment();
   },
 
   readAttributeValue: function() {
-    var parser = this.parser;
-    
+    var reader = this.reader;
+
     if(this.match('{')) {
       this.readExpressionContainer();
       // TODO
@@ -473,40 +409,40 @@ JSXReader.prototype = {
       this.read();
     }
     else {
-      var quote = parser.source[parser.index];
-      var start = parser.index;
+      var quote = reader.source[reader.index];
+      var start = reader.index;
 
       if(quote !== '"' && quote !== "'") {
-        parser.throwSyntaxError(
+        reader.throwSyntaxError(
           'JSX',
           'attributes should be an expression or quoted text',
-          parser.readToken([])
+          reader.readToken()
         );
       }
 
-      parser.index = start + 1;
+      reader.index = start + 1;
       this.readText([quote]);
-      if(quote !== parser.source[parser.index]) {
-        parser.throwSyntaxError(
+      if(quote !== reader.source[reader.index]) {
+        reader.throwSyntaxError(
           'JSX',
           'badly quoted string',
-          parser.readToken([])
+          reader.readToken()
         );
       }
-      parser.index++;
+      reader.index++;
     }
   },
 
   readExpressionContainer: function() {
-    var parser = this.parser;
+    var reader = this.reader;
     this.expect('{');
-    this.parser.scanComment();
+    this.reader.skipComment();
 
     while(!this.match('}')) {
-      this.buffer.add(this.parser.readToken([]));
-      this.parser.scanComment();
+      this.buffer.add(this.reader.readToken());
+      this.reader.skipComment();
     }
-    
+
     this.expect('}');
   },
 
@@ -518,37 +454,36 @@ JSXReader.prototype = {
   },
 
   readIdentifier: function() {
-    var parser = this.parser;
-    parser.scanComment();
+    var reader = this.reader;
+    reader.skipComment();
 
-    var source = parser.source;
+    var source = reader.source;
     var ch, start, value = '';
-    var chCode = source[parser.index].charCodeAt(0);
+    var chCode = source[reader.index].charCodeAt(0);
 
-    if(chCode === 92 || !parser.isIdentifierStart(chCode)) {
+    if(chCode === 92 || !reader.isIdentifierStart(chCode)) {
       throw new JSXBailError('bailed while reading identifier: ' +
-                             parser.ch());
+                             source[reader.index]);
     }
 
-    start = parser.index;
-    while(parser.index < parser.length) {
-      ch = source.charCodeAt(parser.index);
+    start = reader.index;
+    while(reader.index < reader.length) {
+      ch = source.charCodeAt(reader.index);
       // exclude backslash (\) and add hyphen (-)
       if(ch === 92 ||
-         !(ch === 45 || parser.isIdentifierPart(ch))) {
+         !(ch === 45 || reader.isIdentifierPart(ch))) {
         break;
       }
-      value += source[parser.index++];
+      value += source[reader.index++];
     }
 
-    this.buffer.add(withLoc(parser, {
-      type: parser.Token.Identifier,
-      value: value
-    }, start));
+    this.buffer.add(
+      reader.makeIdentifier(value, { start: start })
+    );
   },
 
   readPunc: function() {
-    this.buffer.add(this.parser.scanPunctuator());
+    this.buffer.add(this.reader.readPunctuator());
   }
 };
 
@@ -944,8 +879,8 @@ var JSXTAGS = {
 };
 
 module.exports = sweet.currentReadtable().extend({
-  '<': function (ch, parser) {
-    var reader = new JSXReader(parser);
+  '<': function (ch, reader) {
+    var reader = new JSXReader(reader);
     reader.read();
     var toks = reader.buffer.finish();
     return toks.length ? toks : null;
