@@ -1,7 +1,7 @@
 var fs = require('fs');
 var sweet = require('sweet.js');
 var jsxmacro = sweet.loadNodeModule(process.cwd(), './jsx-macro.js');
-sweet.setReadtable('./jsx-reader.js');
+sweet.setReadtable('./index.js');
 
 var tests = [
   '<a />',

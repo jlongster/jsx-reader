@@ -1,0 +1,24 @@
+{
+  "name": "jsx-reader",
+  "description": "reader",
+  "version": "0.1.0",
+  "author": "James Long <longster@gmail.com>",
+  "peerDependencies": {
+    "sweet.js": ">=0.6.0"
+  },
+  "engines": {
+    "node": "*"
+  },
+  "main": "index",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jlongster/jsx-reader.git"
+  },
+  "license": [{
+    "type": "BSD",
+    "url": "https://github.com/jlongster/jsx-reader/blob/master/LICENSE"
+  }],
+  "bugs": {
+    "url": "https://github.com/jlongster/jsx-reader/issues"
+  }
+}
