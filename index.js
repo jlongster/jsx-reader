@@ -62,7 +62,9 @@ TokenBuffer.prototype = {
   match: function(/* ch1, ch2, ... chN */) {
     var chars = Array.prototype.slice.call(arguments);
     var reader = this.reader;
-    var start = reader.index;
+    var prevState = {
+      index: reader.index
+    };
     var matched = true;
 
     // First, we need to walk through any tokens that are queued
@@ -85,7 +87,7 @@ TokenBuffer.prototype = {
         matched = matched && punc && punc.value === chars[i];
     }
 
-    reader.index = start;
+    reader.index = prevState.index;
     return matched;
   },
 
@@ -117,7 +119,7 @@ JSXReader.prototype = {
   match: function(ch) {
     return this.buffer.match.apply(this.buffer, arguments);
   },
-  
+
   read: function() {
     var reader = this.reader;
     var Token = reader.Token;
@@ -175,7 +177,7 @@ JSXReader.prototype = {
         this.readClosingElement.bind(this)
       );
       var closingName = closingNameToks.reduce(tokReduce, '');
-      
+
       if(openingName !== closingName) {
         this.reader.throwSyntaxError(
           'JSX',
@@ -188,15 +190,18 @@ JSXReader.prototype = {
     if(JSXTAGS[openingName]) {
       openingNameToks[0].value = 'React.DOM.' + openingName;
     }
+
+    // TODO: throw error if top-level elements are found right beside
+    // each other (<div /><div />)
   },
 
   readOpeningElement: function() {
     var reader = this.reader;
     var selfClosing = false;
     var start = reader.index;
-    
+
     this.expect('<');
-    this.readElementName();            
+    this.readElementName();
     reader.skipComment();
 
     var tokens = this.buffer.getTokens(function() {
@@ -231,7 +236,14 @@ JSXReader.prototype = {
   },
 
   readClosingElement: function() {
+    var reader = this.reader;
     this.expect('<');
+
+    if(reader.suppressReadError(reader.readRegExp)) {
+      throw new JSXBailError('bailed because regexp found ' +
+                             'at closing element');
+    }
+
     this.expect('/');
     this.readElementName();
     this.expect('>');
@@ -249,11 +261,11 @@ JSXReader.prototype = {
       var toks = this.buffer.getTokens(function() {
         this.readText(['{', '<']);
       }.bind(this));
-      this.renderLiteral(toks[0].value, start);
+      this.renderLiteral(toks[0].value);
     }
   },
 
-  renderLiteral: function(str, start) {
+  renderLiteral: function(str) {
     var lines = str.split(/\r\n|\n|\r/);
     var output = [];
 
@@ -278,7 +290,10 @@ JSXReader.prototype = {
     });
 
     var reader = this.reader;
-    var tokOpts = { start: start };
+    // We don't care where this starts, because it should never error
+    // (no user code), but we need to give it a valid starting
+    // location for source maps
+    var tokOpts = { start: reader.index };
     output.forEach(function(str, i) {
       if(i !== 0) {
         this.buffer.add(reader.makePunctuator('+', tokOpts));
