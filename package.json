@@ -1,7 +1,7 @@
 {
   "name": "jsx-reader",
   "description": "reader",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": "James Long <longster@gmail.com>",
   "engines": {
     "node": "*"

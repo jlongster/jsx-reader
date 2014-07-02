@@ -181,7 +181,7 @@ JSXReader.prototype = {
       if(openingName !== closingName) {
         this.reader.throwSyntaxError(
           'JSX',
-          'Expected correspoding closing tag for ' + openingName,
+          'Expected corresponding closing tag for ' + openingName,
           closingNameToks[0]
         )
       }
