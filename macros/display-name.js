@@ -1,45 +1,71 @@
 
-macro syntaxString {
-  case { _ $x } => {
-    var stx = #{$x};
-    return [makeValue(unwrapSyntax(stx), #{_})];
+macro _appendDisplayName {
+  case { _ $ctx $id ($names ...) ($values:expr (,) ...) } => {
+    var names = #{$names ...};
+    var values = #{$values ...};
+
+    var skip = names.filter(function(stx) {
+      return stx.token.value === 'displayName';
+    }).length;
+
+    if(!skip) {
+      names.unshift(makeIdent('displayName', #{$ctx}));
+      values.unshift(makeValue(unwrapSyntax(#{$id}), #{$ctx}));
+    }
+
+    // Keep the same hygienge
+    letstx $react = [makeIdent('React', #{$ctx})],
+    $names ... = names,
+    $values ... = values;
+    
+    return #{
+      $react.createClass({
+        $($names:$values) (,) ...
+      })
+    };
   }
 }
 
 let var = macro {
-  rule { $id:ident = React.createClass({ $prop ... }) } => {
-    var $id = React.createClass({
-      displayName: syntaxString $id,
-      $prop ...
+  case {
+    $_ $id:ident = React.createClass({
+      $($pname $[:] $pvalue:expr) (,) ...
     })
+  } => {
+    return #{
+      var $id = _appendDisplayName $_ $id ($pname ...) ($pvalue (,) ...)
+    };    
   }
 
-  rule {} => { var }
+  case { $_ } => { return #{var}; }
 }
 export var;
 
-let (React.createClass) = macro {
-  rule infix { $obj.$name = | ({ $prop ... }) } => {
-    $obj.$name = React.createClass({
-      displayName: syntaxString $name,
-      $prop ...
-    })
+let createClass = macro {
+  case infix {
+    $obj.$name = React. | $_ ({ $($pname $[:] $pvalue:expr) (,) ... })
+  } => {
+    return #{
+      $obj.$name = _appendDisplayName $_ $name ($pname ...) ($pvalue (,) ...)
+    };
   }
 
-  rule infix { $name = | ({ $prop ... }) } => {
-    $name = React.createClass({
-      displayName: syntaxString $name,
-      $prop ...
-    })
+  case infix {
+    $name = React. | $_ ({ $($pname $[:] $pvalue:expr) (,) ... })
+  } => {
+    return #{
+      $name = _appendDisplayName $_ $name ($pname ...) ($pvalue (,) ...)
+    };
   }
 
-  rule infix { $name : | ({ $prop ... }) } => {
-    $name: React.createClass({
-      displayName: syntaxString $name,
-      $prop ...
-    })
+  case infix {
+    $name $[:] React. | $_ ({ $($pname $[:] $pvalue:expr) (,) ... })
+  } => {
+    return #{
+      $name: _appendDisplayName $_ $name ($pname ...) ($pvalue (,) ...)
+    };
   }
 
-  rule {} => { React.createClass }
+  //case { $_ } => { return #{createClass}; }
 }
-export (React.createClass);
+export createClass;
