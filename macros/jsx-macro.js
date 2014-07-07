@@ -1,28 +1,32 @@
 
-let DOM = macro {
-    rule { { $a . $b $expr ... } } => {
-        DOM_member { $a . $b $expr ... }
-    }
-    
-    rule { { $el $attrs } } => {
-        $el($attrs)
-    }
+let _DOM = macro {
+  rule { { $a . $b $expr ... } } => {
+    _DOM_member { $a . $b $expr ... }
+  }
+  
+  rule { { $el $attrs } } => {
+    $el($attrs)
+  }
 
-    rule { { $elStart $attrs $children:expr ... } } => {
-        $elStart($attrs, $children (,) ...)
-    }
-    
-    rule { } => { DOM }
+  rule { { $el $attrs , } } => {
+    $el($attrs)
+  }
+
+  rule { { $elStart $attrs $($children:expr,) ... } } => {
+    $elStart($attrs, $children (,) ...)
+  }
+  
+  rule { } => { _DOM }
 }
 
-macro DOM_member {
-    rule { { $a . $b $expr ... } } => {
-        DOM_member { ($a . $b) $expr ... }
-    }
+macro _DOM_member {
+  rule { { $a . $b $expr ... } } => {
+    _DOM_member { ($a . $b) $expr ... }
+  }
 
-    rule { { $expr ... } } => {
-        DOM { $expr ... }
-    }
+  rule { { $expr ... } } => {
+    _DOM { $expr ... }
+  }
 }
 
-export DOM
+export _DOM

@@ -36,7 +36,7 @@ var results = [
 
 tests.forEach(function(test, i) {
   var code = sweet.compile(test).code;
-
+  
   code = code.trim()
     .replace(/;$/, '')
     .replace(/\n/g, '')

@@ -35,6 +35,10 @@ TokenBuffer.prototype = {
     return buf;
   },
 
+  length: function() {
+    return this.buffer.length;
+  },
+  
   reset: function() {
     this.buffer = [];
   },
@@ -143,7 +147,7 @@ JSXReader.prototype = {
     }
 
     var tokens = [
-        reader.makeIdentifier('DOM', { start: start }),
+        reader.makeIdentifier('_DOM', { start: start }),
         reader.makeDelimiter('{}', innerTokens)
     ];
 
@@ -159,7 +163,7 @@ JSXReader.prototype = {
 
     var reader = this.reader;
     var Token = reader.Token, selfClosing;
-    var openingNameToks = this.buffer.watchTokens(function() {
+    var openingNameToks = this.buffer.getTokens(function() {
       selfClosing = this.readOpeningElement();
     }.bind(this));
 
@@ -168,13 +172,28 @@ JSXReader.prototype = {
     var openingName = openingNameToks.slice(0, -1)
         .reduce(tokReduce, '');
 
+    // Prefix the name with React.DOM if necessary
+    if(JSXTAGS[openingName]) {
+      openingNameToks.unshift(reader.makePunctuator('.'));
+      openingNameToks.unshift(reader.makeIdentifier('DOM'));
+      openingNameToks.unshift(reader.makePunctuator('.'));
+      openingNameToks.unshift(reader.makeIdentifier('React'));
+    }
+
+    this.buffer.add(openingNameToks);
+
     if(!selfClosing) {
       while(this.reader.index < this.reader.length) {
         if(this.match('<', '/')) {
           break;
         }
 
+        var prev = this.buffer.length();
         this.readChild();
+
+        if(this.buffer.length() !== prev) {
+          this.buffer.add(reader.makePunctuator(','));
+        }
       }
 
       var closingNameToks = this.buffer.getTokens(
@@ -189,10 +208,6 @@ JSXReader.prototype = {
           closingNameToks[0]
         )
       }
-    }
-
-    if(JSXTAGS[openingName]) {
-      openingNameToks[0].value = 'React.DOM.' + openingName;
     }
 
     // TODO: throw error if top-level elements are found right beside
