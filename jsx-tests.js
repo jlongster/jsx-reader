@@ -1,6 +1,5 @@
 var fs = require('fs');
 var sweet = require('sweet.js');
-var jsxmacro = sweet.loadNodeModule(process.cwd(), './jsx-macro.js');
 sweet.setReadtable('./index.js');
 
 var tests = [
@@ -36,9 +35,7 @@ var results = [
 ];
 
 tests.forEach(function(test, i) {
-  var code = sweet.compile(test, {
-    modules: jsxmacro
-  }).code;
+  var code = sweet.compile(test).code;
 
   code = code.trim()
     .replace(/;$/, '')

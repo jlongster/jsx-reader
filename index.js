@@ -1,6 +1,10 @@
 
+// TODO: https://github.com/facebook/react/commit/e6134c307e2bb7765aaa747eb5d2136fc18abbd7
+
 var sweet = require('sweet.js');
-var helperMacro = sweet.loadNodeModule(__dirname, './jsx-macro.js');
+var helperMacro = sweet.loadNodeModule(__dirname, './macros/jsx-macro.js');
+
+sweet.loadMacro(__dirname + '/macros/display-name.js');
 
 // Error handling
 
