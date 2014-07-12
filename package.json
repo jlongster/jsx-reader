@@ -20,5 +20,9 @@
   },
   "dependencies": {
     "sweet.js": "^0.7.0"
+  },
+  "devDependencies": {
+    "diff": "^1.0.8",
+    "colors": "^0.6.2"
   }
 }
